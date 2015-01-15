@@ -1,19 +1,8 @@
-class Array
-  def unique_values
-    unique_elements = []
-    each do |element|
-      unique_elements << element unless unique_elements.include?(element)
-    end
-
-    unique_elements
-  end
-end
-
 class NumberSet
   include Enumerable
 
-  def initialize
-    @elements = []
+  def initialize(input = [])
+    @elements = input.uniq
   end
 
   def size
@@ -24,91 +13,58 @@ class NumberSet
     @elements.empty?
   end
 
-  def <<(new_number)
-    @elements.push(new_number)
-    @elements = @elements.unique_values #uniq
-
-    self
+  def <<(number)
+    @elements << number unless @elements.include?(number)
   end
 
   def to_a
     @elements
   end
 
-  def each
-    @elements.each do |element|
-      yield(element)
-    end
-
-    self
+  def each(&block)
+    @elements.each(&block)
   end
 
   def [](filter)
-    result = NumberSet.new
-    filter.each(@elements) { |element| result << element }
-
-    result
-  end
-end
-
-module SharedMethods
-  attr_reader :block
-
-  def each(elements)
-    @filtered = []
-    elements.each do |elem|
-      if block.call(elem) == true & not(@filtered.include?(elem))
-        yield(elem)
-      end
-    end
-
-    @filtered
-  end
-
-  def &(filter)
-    Filter.new { |n| self.block.call(n) and filter.block.call(n) }
-  end
-
-  def |(filter)
-    Filter.new { |n| self.block.call(n) or filter.block.call(n) }
+    NumberSet.new @elements.select { |x| filter.call(x) }
   end
 end
 
 class Filter
-  include SharedMethods
-
   def initialize(&block)
     @block = block
-    @filtered = []
-    @input = []
+  end
+
+  def &(other)
+    Filter.new { |x| @block.call(x) and other.call(x) }
+  end
+
+  def |(other)
+    Filter.new { |x| @block.call(x) or other.call(x) }
+  end
+
+  def call(p)
+    @block.call(p)
   end
 end
 
-class SignFilter
-  include SharedMethods
-
-  def initialize(polarity)
-    @block = case polarity
-               when :positive     then ->(n) { n > 0 }
-               when :non_positive then ->(n) { n <= 0 }
-               when :negative     then ->(n) { n < 0 }
-               when :non_negative then ->(n) { n >= 0 }
-             end
-    @filtered = []
-    @input = []
-  end
-end
-
-class TypeFilter
-  include SharedMethods
-
+class TypeFilter < Filter
   def initialize(type)
-    @block = case type
-               when :integer then ->(n) { n.integer? }
-               when :real    then ->(n) { n.real? and not(n.integer?) }
-               when :complex then ->(n) { n.is_a?(Complex) }
-             end
-    @input = []
-    @filtered = []
+    case type
+      when :integer then super() { |x| x.is_a? Integer }
+      when :complex then super() { |x| x.is_a? Complex }
+      when :real    then super() { |x| x.is_a? Float or x.is_a? Rational }
+    end
+  end
+end
+
+class SignFilter < Filter
+  def initialize(polarity)
+    case polarity
+      when :non_positive then super() { |x| x <= 0 }
+      when :non_negative then super() { |x| x >= 0 }
+      when :positive     then super() { |x| x > 0 }
+      when :negative     then super() { |x| x < 0 }
+    end
   end
 end
